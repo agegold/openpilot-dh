@@ -74,8 +74,6 @@ fail:
 }
 
 static void ui_set_brightness(UIState *s, int brightness) {
-  int perc = 80;
-  brightness = brightness * perc / 100;
   static int last_brightness = -1;
   if (last_brightness != brightness && (s->awake || brightness == 0)) {
     if (set_brightness(brightness)) {
