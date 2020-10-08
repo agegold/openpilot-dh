@@ -2,9 +2,7 @@ from cereal import car
 from common.realtime import DT_CTRL
 from common.numpy_fast import clip
 from selfdrive.car import apply_std_steer_torque_limits
-from selfdrive.car.hyundai.hyundaican import create_lkas11, create_clu11, create_lfa_mfa, \
-                                             create_scc11, create_scc12,  create_scc13, create_scc14, \
-                                             create_mdps12, create_spas11, create_spas12, create_ems11
+from selfdrive.car.hyundai.hyundaican import create_lkas11, create_clu11, create_lfa_mfa, create_mdps12 #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
 from selfdrive.car.hyundai.values import Buttons, SteerLimitParams, CAR, FEATURES
 from opendbc.can.packer import CANPacker
 from selfdrive.config import Conversions as CV
@@ -107,8 +105,8 @@ class CarController():
     CC.applySteer = apply_steer
 
     # SPAS limit angle extremes for safety
-    if CS.spas_enabled:
-      apply_steer_ang_req = clip(actuators.steerAngle, -1*(STEER_ANG_MAX), STEER_ANG_MAX)
+    #if CS.spas_enabled:
+    #  apply_steer_ang_req = clip(actuators.steerAngle, -1*(STEER_ANG_MAX), STEER_ANG_MAX)
       # SPAS limit angle rate for safety
       if abs(self.apply_steer_ang - apply_steer_ang_req) > STEER_ANG_MAX_RATE:
         if apply_steer_ang_req > self.apply_steer_ang:
@@ -121,7 +119,7 @@ class CarController():
 
     # disable if steer angle reach 90 deg, otherwise mdps fault in some models
     # temporarily disable steering when LKAS button off 
-    lkas_active = enabled and abs(CS.out.steeringAngle) < 90. and self.lkas_button_on and not spas_active
+    lkas_active = enabled and abs(CS.out.steeringAngle) < 90. #TenesiDel -> and self.lkas_button_on
 
     # fix for Genesis hard fault at low speed
     if CS.out.vEgo < 60 * CV.KPH_TO_MS and self.car_fingerprint == CAR.GENESIS and not CS.mdps_bus:
@@ -133,9 +131,9 @@ class CarController():
         self.turning_signal_timer = 100  # Disable for 1.0 Seconds after blinker turned off
       elif CS.left_blinker_flash or CS.right_blinker_flash: # Optima has blinker flash signal only
         self.turning_signal_timer = 100
-    if self.turning_indicator_alert: # set and clear by interface
+    if self.turning_signal_timer and CS.out.vEgo > 60 * CV.KPH_TO_MS: #TenesiADD Blinker tune 시속60미만에서는 상시조향
       lkas_active = 0
-    if self.turning_signal_timer > 0:
+    if self.turning_signal_timer: #TenesiADD
       self.turning_signal_timer -= 1
 
     if not lkas_active:
@@ -150,38 +148,25 @@ class CarController():
                         self.lkas_button_on)
 
     clu11_speed = CS.clu11["CF_Clu_Vanz"]
-    enabled_speed = 38 if CS.is_set_speed_in_mph  else 60
+    enabled_speed = 34 if CS.is_set_speed_in_mph  else 55 #Tenesiadd 073버젼참조수정
     if clu11_speed > enabled_speed or not lkas_active:
       enabled_speed = clu11_speed
 
     if not(min_set_speed < set_speed < 255 * CV.KPH_TO_MS):
-      set_speed = min_set_speed 
+      set_speed = min_set_speed
     set_speed *= CV.MS_TO_MPH if CS.is_set_speed_in_mph else CV.MS_TO_KPH
+
+    can_sends = [] #TenesiADD 0.7.3등의 버젼에서 이 명령의 위치가 달라서 적용함
 
     if frame == 0: # initialize counts from last received count signals
       self.lkas11_cnt = CS.lkas11["CF_Lkas_MsgCount"]
-      self.scc12_cnt = CS.scc12["CR_VSM_Alive"] + 1 if not CS.no_radar else 0
+      self.scc12_cnt = CS.scc12["CR_VSM_Alive"] + 1 if not CS.no_radar else 0 #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
 
-      #TODO: fix this
-      # self.prev_scc_cnt = CS.scc11["AliveCounterACC"]
-      # self.scc_update_frame = frame
-
-    # check if SCC is alive
-    # if frame % 7 == 0:
-      # if CS.scc11["AliveCounterACC"] == self.prev_scc_cnt:
-        # if frame - self.scc_update_frame > 20 and self.scc_live:
-          # self.scc_live = False
-      # else:
-        # self.scc_live = True
-        # self.prev_scc_cnt = CS.scc11["AliveCounterACC"]
-        # self.scc_update_frame = frame
-
-    self.prev_scc_cnt = CS.scc11["AliveCounterACC"]
+    self.prev_scc_cnt = CS.scc11["AliveCounterACC"] #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
 
     self.lkas11_cnt = (self.lkas11_cnt + 1) % 0x10
     self.scc12_cnt %= 0xF
 
-    can_sends = []
     can_sends.append(create_lkas11(self.packer, frame, self.car_fingerprint, apply_steer, lkas_active,
                                    CS.lkas11, sys_warning, sys_state, enabled, left_lane, right_lane,
                                    left_lane_warning, right_lane_warning, 0))
@@ -195,72 +180,34 @@ class CarController():
 
     if pcm_cancel_cmd and self.longcontrol:
       can_sends.append(create_clu11(self.packer, frame, CS.scc_bus, CS.clu11, Buttons.CANCEL, clu11_speed))
+    elif CS.mdps_bus: # send mdps12 to LKAS to prevent LKAS error if no cancel cmd
+      can_sends.append(create_mdps12(self.packer, frame, CS.mdps12)) #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
 
-    if CS.out.cruiseState.standstill:
+    if CS.scc_bus and self.longcontrol and frame % 2: # send scc12 to car if SCC not on bus 0 and longcontrol enabled
+      can_sends.append(create_scc12(self.packer, apply_accel, enabled, self.scc12_cnt, CS.scc12))
+      self.scc12_cnt += 1
+
+    if CS.out.cruiseState.standstill: #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
       # run only first time when the car stopped
       if self.last_lead_distance == 0:
         # get the lead distance from the Radar
         self.last_lead_distance = CS.lead_distance
         self.resume_cnt = 0
-      # when lead car starts moving, create 6 RES msgs
-      elif CS.lead_distance != self.last_lead_distance and (frame - self.last_resume_frame) > 5:
+      # when lead car starts moving, create 6 RES msgs #TenesiADD
+      elif CS.lead_distance > self.last_lead_distance and (frame - self.last_resume_frame) > 5:
         can_sends.append(create_clu11(self.packer, frame, CS.scc_bus, CS.clu11, Buttons.RES_ACCEL, clu11_speed))
         self.resume_cnt += 1
         # interval after 6 msgs
         if self.resume_cnt > 5:
           self.last_resume_frame = frame
-
+          self.clu11_cnt = 0
+          self.resume_cnt = 0 #TenesiADD 빠릿빠릿한 반응 코드 적용
     # reset lead distnce after the car starts moving
     elif self.last_lead_distance != 0:
       self.last_lead_distance = 0
 
-    if CS.mdps_bus: # send mdps12 to LKAS to prevent LKAS error
-      can_sends.append(create_mdps12(self.packer, frame, CS.mdps12))
-
-    # send scc to car if longcontrol enabled and SCC not on bus 0 or ont live
-    if self.longcontrol and (CS.scc_bus or not self.scc_live) and frame % 2 == 0: 
-      can_sends.append(create_scc12(self.packer, apply_accel, enabled, self.scc12_cnt, self.scc_live, CS.scc12))
-      can_sends.append(create_scc11(self.packer, frame, enabled, set_speed, lead_visible, self.scc_live, CS.scc11))
-      if CS.has_scc13 and frame % 20 == 0:
-        can_sends.append(create_scc13(self.packer, CS.scc13))
-      if CS.has_scc14:
-        can_sends.append(create_scc14(self.packer, enabled, CS.scc14))
-      self.scc12_cnt += 1
-
     # 20 Hz LFA MFA message
     if frame % 5 == 0 and self.car_fingerprint in FEATURES["send_lfa_mfa"]:
       can_sends.append(create_lfa_mfa(self.packer, frame, lkas_active))
-
-    if CS.spas_enabled:
-      if CS.mdps_bus:
-        can_sends.append(create_ems11(self.packer, CS.ems11, spas_active))
-
-      # SPAS11 50hz
-      if (frame % 2) == 0:
-        if CS.mdps11_stat == 7 and not self.mdps11_stat_last == 7:
-          self.en_spas = 7
-          self.en_cnt = 0
-
-        if self.en_spas == 7 and self.en_cnt >= 8:
-          self.en_spas = 3
-          self.en_cnt = 0
-  
-        if self.en_cnt < 8 and spas_active:
-          self.en_spas = 4
-        elif self.en_cnt >= 8 and spas_active:
-          self.en_spas = 5
-
-        if not spas_active:
-          self.apply_steer_ang = CS.mdps11_strang
-          self.en_spas = 3
-          self.en_cnt = 0
-
-        self.mdps11_stat_last = CS.mdps11_stat
-        self.en_cnt += 1
-        can_sends.append(create_spas11(self.packer, self.car_fingerprint, (frame // 2), self.en_spas, self.apply_steer_ang, CS.mdps_bus))
-
-      # SPAS12 20Hz
-      if (frame % 5) == 0:
-        can_sends.append(create_spas12(CS.mdps_bus))
 
     return can_sends

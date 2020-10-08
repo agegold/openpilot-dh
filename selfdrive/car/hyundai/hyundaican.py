@@ -21,6 +21,11 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
   values["CF_Lkas_MsgCount"] = frame % 0x10
   values["CF_Lkas_Chksum"] = 0
 
+  if car_fingerprint == CAR.GENESIS: #TenesiADD 제네시스DH의 조향신호 에러 개선을 위한 위치 이동
+    # This field is actually LdwsActivemode
+    # Genesis and Optima fault when forwarding while engaged
+    values["CF_Lkas_LdwsActivemode"] = 2
+
   if car_fingerprint in [CAR.SONATA, CAR.PALISADE, CAR.SONATA_HEV, CAR.SANTA_FE, CAR.KONA_EV, CAR.NIRO_EV]:
     values["CF_Lkas_LdwsActivemode"] = int(left_lane) + (int(right_lane) << 1)
     values["CF_Lkas_LdwsOpt_USM"] = 2
@@ -39,10 +44,6 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
     # Note: the warning is hidden while the blinkers are on
     values["CF_Lkas_SysWarning"] = 4 if sys_warning else 0
 
-  elif car_fingerprint == CAR.GENESIS:
-    # This field is actually LdwsActivemode
-    # Genesis and Optima fault when forwarding while engaged
-    values["CF_Lkas_LdwsActivemode"] = 2
   elif car_fingerprint == CAR.OPTIMA:
     values["CF_Lkas_LdwsActivemode"] = 0
 
@@ -102,71 +103,3 @@ def create_mdps12(packer, frame, mdps12):
   values["CF_Mdps_Chksum2"] = checksum
 
   return packer.make_can_msg("MDPS12", 2, values)
-
-def create_scc11(packer, frame, enabled, set_speed, lead_visible, scc_live, scc11):
-  values = copy.copy(scc11)
-  values["AliveCounterACC"] = frame // 2 % 0x10
-  if not scc_live:
-    values["MainMode_ACC"] = 1
-    values["VSetDis"] = set_speed
-    values["ObjValid"] = 1 if enabled else 0
-#  values["ACC_ObjStatus"] = lead_visible
-
-  return packer.make_can_msg("SCC11", 0, values)
-
-def create_scc12(packer, apply_accel, enabled, cnt, scc_live, scc12):
-  values = copy.copy(scc12)
-  values["aReqRaw"] = apply_accel if enabled else 0 #aReqMax
-  values["aReqValue"] = apply_accel if enabled else 0 #aReqMin
-  values["CR_VSM_Alive"] = cnt
-  values["CR_VSM_ChkSum"] = 0
-  if not scc_live:
-    values["ACCMode"] = 1  if enabled else 0 # 2 if gas padel pressed
-
-  dat = packer.make_can_msg("SCC12", 0, values)[2]
-  values["CR_VSM_ChkSum"] = 16 - sum([sum(divmod(i, 16)) for i in dat]) % 16
-
-  return packer.make_can_msg("SCC12", 0, values)
-
-def create_scc13(packer, scc13):
-  values = copy.copy(scc13)
-  return packer.make_can_msg("SCC13", 0, values)
-
-def create_scc14(packer, enabled, scc14):
-  values = copy.copy(scc14)
-  if enabled:
-    values["JerkUpperLimit"] = 3.2
-    values["JerkLowerLimit"] = 0.1
-    values["SCCMode"] = 1
-    values["ComfortBandUpper"] = 0.24
-    values["ComfortBandLower"] = 0.24
-
-  return packer.make_can_msg("SCC14", 0, values)
-
-def create_spas11(packer, car_fingerprint, frame, en_spas, apply_steer, bus):
-  values = {
-    "CF_Spas_Stat": en_spas,
-    "CF_Spas_TestMode": 0,
-    "CR_Spas_StrAngCmd": apply_steer,
-    "CF_Spas_BeepAlarm": 0,
-    "CF_Spas_Mode_Seq": 2,
-    "CF_Spas_AliveCnt": frame % 0x200,
-    "CF_Spas_Chksum": 0,
-    "CF_Spas_PasVol": 0,
-  }
-  dat = packer.make_can_msg("SPAS11", 0, values)[2]
-  if car_fingerprint in CHECKSUM["crc8"]:
-    dat = dat[:6]
-    values["CF_Spas_Chksum"] = hyundai_checksum(dat)
-  else:
-    values["CF_Spas_Chksum"] = sum(dat[:6]) % 256
-  return packer.make_can_msg("SPAS11", bus, values)
-
-def create_spas12(bus):
-  return [1268, 0, "\x00\x00\x00\x00\x00\x00\x00\x00", bus]
-
-def create_ems11(packer, ems11, enabled):
-  values = copy.copy(ems11)
-  if enabled:
-    values["VS"] = 0
-  return packer.make_can_msg("values", 1, ems11)

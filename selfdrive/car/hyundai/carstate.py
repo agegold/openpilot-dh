@@ -110,7 +110,7 @@ class CarState(CarStateBase):
       elif cp.vl["CLU15"]["CF_Clu_InhibitR"] == 1:
         ret.gearShifter = GearShifter.reverse
       else:
-        ret.gearShifter = GearShifter.unknown
+        ret.gearShifter = GearShifter.drive #TenesiADD 패들쉬프트 작동시 오파 작동되게 수정
     # Gear Selecton via TCU12
     elif self.CP.carFingerprint in FEATURES["use_tcu_gears"]:
       gear = cp.vl["TCU12"]["CUR_GR"]
@@ -121,7 +121,7 @@ class CarState(CarStateBase):
       elif gear > 0 and gear < 9:    # unaware of anything over 8 currently
         ret.gearShifter = GearShifter.drive
       else:
-        ret.gearShifter = GearShifter.unknown
+        ret.gearShifter = GearShifter.drive #TenesiADD 패들쉬프트 작동시 오파 작동되게 수정
     # Gear Selecton - This is only compatible with optima hybrid 2017
     elif self.CP.carFingerprint in FEATURES["use_elect_gears"]:
       gear = cp.vl["ELECT_GEAR"]["Elect_Gear_Shifter"]
@@ -134,7 +134,7 @@ class CarState(CarStateBase):
       elif gear == 7:
         ret.gearShifter = GearShifter.reverse
       else:
-        ret.gearShifter = GearShifter.unknown
+        ret.gearShifter = GearShifter.drive #TenesiADD 패들쉬프트 작동시 오파 작동되게 수정
     # Gear Selecton - This is not compatible with all Kia/Hyundai's, But is the best way for those it is compatible with
     else:
       gear = cp.vl["LVR12"]["CF_Lvr_Gear"]
@@ -147,7 +147,7 @@ class CarState(CarStateBase):
       elif gear == 7:
         ret.gearShifter = GearShifter.reverse
       else:
-        ret.gearShifter = GearShifter.unknown
+        ret.gearShifter = GearShifter.drive #TenesiADD 패들쉬프트 작동시 오파 작동되게 수정
 
     if self.CP.carFingerprint in FEATURES["use_fca"]:
       ret.stockAeb = cp.vl["FCA11"]['FCA_CmdAct'] != 0
