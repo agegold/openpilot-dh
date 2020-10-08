@@ -62,14 +62,18 @@ static void ui_draw_sidebar_network_type(UIState *s) {
   const int network_y = 273;
   const int network_w = 100;
   const char *network_type = network_type_map[s->scene.thermal.getNetworkType()];
-  nvgFillColor(s->vg, COLOR_WHITE);
-  nvgFontSize(s->vg, 48);
+  nvgFillColor(s->vg, COLOR_LIME);
+  nvgFontSize(s->vg, 40);
   nvgFontFaceId(s->vg, s->font_sans_regular);
   nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
   nvgTextBox(s->vg, network_x, network_y, network_w, network_type ? network_type : "--", NULL);
-
+  nvgFillColor(s->vg, COLOR_ORANGE);  
+  nvgFontFaceId(s->vg, s->font_sans_bold);
+  nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+  nvgFontSize(s->vg, 60);
   std::string ip = s->scene.thermal.getWifiIpAddress();
-  nvgTextBox(s->vg, network_x-20, network_y + 60, 250, ip.c_str(), NULL);
+  nvgTextBox(s->vg, network_x-47, network_y + 62, 500, ip.c_str(), NULL);
+
 }
 
 static void ui_draw_sidebar_metric(UIState *s, const char* label_str, const char* value_str, const int severity, const int y_offset, const char* message_str) {
