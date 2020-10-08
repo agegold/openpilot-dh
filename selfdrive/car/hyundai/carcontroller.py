@@ -108,14 +108,14 @@ class CarController():
     #if CS.spas_enabled:
     #  apply_steer_ang_req = clip(actuators.steerAngle, -1*(STEER_ANG_MAX), STEER_ANG_MAX)
       # SPAS limit angle rate for safety
-      if abs(self.apply_steer_ang - apply_steer_ang_req) > STEER_ANG_MAX_RATE:
-        if apply_steer_ang_req > self.apply_steer_ang:
-          self.apply_steer_ang += STEER_ANG_MAX_RATE
-        else:
-          self.apply_steer_ang -= STEER_ANG_MAX_RATE
-      else:
-        self.apply_steer_ang = apply_steer_ang_req
-    spas_active = CS.spas_enabled and enabled and (self.spas_always or CS.out.vEgo < 7.0) # 25km/h
+    #  if abs(self.apply_steer_ang - apply_steer_ang_req) > STEER_ANG_MAX_RATE:
+    #    if apply_steer_ang_req > self.apply_steer_ang:
+    #      self.apply_steer_ang += STEER_ANG_MAX_RATE
+    #    else:
+    #      self.apply_steer_ang -= STEER_ANG_MAX_RATE
+    #  else:
+    #    self.apply_steer_ang = apply_steer_ang_req
+    #spas_active = CS.spas_enabled and enabled and (self.spas_always or CS.out.vEgo < 7.0) # 25km/h
 
     # disable if steer angle reach 90 deg, otherwise mdps fault in some models
     # temporarily disable steering when LKAS button off 
