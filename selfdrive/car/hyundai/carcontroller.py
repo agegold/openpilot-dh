@@ -175,7 +175,7 @@ class CarController():
       can_sends.append(create_lkas11(self.packer, frame, self.car_fingerprint, apply_steer, lkas_active,
                                    CS.lkas11, sys_warning, sys_state, enabled, left_lane, right_lane,
                                    left_lane_warning, right_lane_warning, 1))
-    if CS.mdps_bus: # send clu11 to mdps if it is not on bus 0
+    if frame % 2 and CS.mdps_bus: # send clu11 to mdps if it is not on bus 0 #TenesiADD 제네시스DH기준으로 수정 201009
       can_sends.append(create_clu11(self.packer, frame, CS.mdps_bus, CS.clu11, Buttons.NONE, enabled_speed))
 
     if pcm_cancel_cmd and self.longcontrol:
