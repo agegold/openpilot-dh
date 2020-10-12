@@ -157,35 +157,23 @@ class CarController():
     set_speed *= CV.MS_TO_MPH if CS.is_set_speed_in_mph else CV.MS_TO_KPH
 
     can_sends = [] #TenesiADD 0.7.3등의 버젼에서 이 명령의 위치가 달라서 적용함
-
     if frame == 0: # initialize counts from last received count signals
       self.lkas11_cnt = CS.lkas11["CF_Lkas_MsgCount"]
-      self.scc12_cnt = CS.scc12["CR_VSM_Alive"] + 1 if not CS.no_radar else 0 #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
-
-    self.prev_scc_cnt = CS.scc11["AliveCounterACC"] #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
-
     self.lkas11_cnt = (self.lkas11_cnt + 1) % 0x10
-    self.scc12_cnt %= 0xF
 
     can_sends.append(create_lkas11(self.packer, frame, self.car_fingerprint, apply_steer, lkas_active,
                                    CS.lkas11, sys_warning, sys_state, enabled, left_lane, right_lane,
                                    left_lane_warning, right_lane_warning, 0))
-
     if CS.mdps_bus or CS.scc_bus == 1: # send lkas11 bus 1 if mdps or scc is on bus 1
       can_sends.append(create_lkas11(self.packer, frame, self.car_fingerprint, apply_steer, lkas_active,
                                    CS.lkas11, sys_warning, sys_state, enabled, left_lane, right_lane,
                                    left_lane_warning, right_lane_warning, 1))
     if CS.mdps_bus: # send clu11 to mdps if it is not on bus 0
       can_sends.append(create_clu11(self.packer, frame, CS.mdps_bus, CS.clu11, Buttons.NONE, enabled_speed))
+    can_sends.append(create_mdps12(self.packer, frame, CS.mdps12))  # TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
 
     if pcm_cancel_cmd and self.longcontrol:
       can_sends.append(create_clu11(self.packer, frame, CS.scc_bus, CS.clu11, Buttons.CANCEL, clu11_speed))
-    elif CS.mdps_bus: # send mdps12 to LKAS to prevent LKAS error if no cancel cmd
-      can_sends.append(create_mdps12(self.packer, frame, CS.mdps12)) #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
-
-    if CS.scc_bus and self.longcontrol and frame % 2: # send scc12 to car if SCC not on bus 0 and longcontrol enabled
-      can_sends.append(create_scc12(self.packer, apply_accel, enabled, self.scc12_cnt, CS.scc12))
-      self.scc12_cnt += 1
 
     if CS.out.cruiseState.standstill: #TenesiADD 제네시스DH 기준으로 작동 잘되게 수정
       # run only first time when the car stopped
@@ -194,7 +182,7 @@ class CarController():
         self.last_lead_distance = CS.lead_distance
         self.resume_cnt = 0
       # when lead car starts moving, create 6 RES msgs #TenesiADD
-      elif CS.lead_distance > self.last_lead_distance and (frame - self.last_resume_frame) > 5:
+      elif CS.lead_distance != self.last_lead_distance and (frame - self.last_resume_frame) > 5:
         can_sends.append(create_clu11(self.packer, frame, CS.scc_bus, CS.clu11, Buttons.RES_ACCEL, clu11_speed))
         self.resume_cnt += 1
         # interval after 6 msgs
@@ -210,4 +198,5 @@ class CarController():
     if frame % 5 == 0 and self.car_fingerprint in FEATURES["send_lfa_mfa"]:
       can_sends.append(create_lfa_mfa(self.packer, frame, lkas_active))
 
+    self.lkas11_cnt += 1
     return can_sends
